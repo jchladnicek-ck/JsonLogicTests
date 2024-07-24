@@ -1,5 +1,7 @@
 ﻿using JsonLogic.Net;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace JsonLogicTests
 {
@@ -21,11 +23,44 @@ namespace JsonLogicTests
                 var testCase = testCases[i - 1];
                 var monthlyVolume = testCase.MonthlyVolume;
                 var averageTicket = testCase.AverageTicket;
-                Console.WriteLine(@$"Test Case {i}: {nameof(monthlyVolume)}={monthlyVolume}, {nameof(averageTicket)}={averageTicket}, result={GetAppLevel(monthlyVolume, averageTicket)}");
+                var appLevel = GetAppLevel(monthlyVolume, averageTicket);
+                Console.WriteLine(@$"Test Case {i}: {nameof(monthlyVolume)}={monthlyVolume}, {nameof(averageTicket)}={averageTicket}, result={appLevel}");
             }
         }
 
         static int GetAppLevel(decimal monthlyVolume, decimal averageTicket)
+        {
+            // Rule definition retrieved as JSON text
+            var jsonText = @"{
+                ""if"": [
+                    {"">"": [{ ""var"":""monthlyVolume""}, 1000000] }, 4,
+                    {""or"": [
+                        { "">"": [{ ""var"":""monthlyVolume""}, 166666] },
+                        { "">"": [{ ""var"":""averageTicket""}, 25000] }]
+                    }, 3,
+                    {""or"": [
+                        { "">"": [{ ""var"":""monthlyVolume""}, 50000] },
+                        { "">"": [{ ""var"":""averageTicket""}, 1000] }]
+                    }, 2, 1]
+            }";
+
+            //string that would be stored in AWS param store:
+            //{\"if\": [{\">\": [{ \"var\":\"monthlyVolume\"}, 2000000] }, 4, {\"or\": [{ \">\": [{ \"var\":\"monthlyVolume\"}, 166666] }, { \">\": [{ \"var\":\"averageTicket\"}, 25000] }]}, 3, {\"or\": [{ \">\": [{ \"var\":\"monthlyVolume\"}, 50000] }, { \">\": [{ \"var\":\"averageTicket\"}, 1000] }] }, 2, 1]}
+
+            // Parse json into hierarchical structure
+            var rule = JsonNode.Parse(jsonText);
+            var data = JsonNode.Parse(JsonConvert.SerializeObject(new { monthlyVolume, averageTicket }, Formatting.None));
+            JsonNode? result = Json.Logic.JsonLogic.Apply(rule, data);
+
+            if (result != null)
+                return (int)result.AsValue();
+            else
+                return 1;
+        }
+
+
+
+        static int GetAppLevel_old(decimal monthlyVolume, decimal averageTicket)
         {
             var data = new { monthlyVolume, averageTicket };
 
